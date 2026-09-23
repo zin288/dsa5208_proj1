@@ -13,7 +13,7 @@ from docker_utils import docker_exec, docker_start, container_running
 ALL_NODES = ["mongo1", "mongo2", "mongo3"]
 
 
-def main():
+def recover():
     for node in ALL_NODES:
         if not container_running(node):
             docker_start(node)
@@ -23,6 +23,9 @@ def main():
         docker_exec(node, ["iptables", "-F"], check=False)
         docker_exec(node, ["iptables", "-X"], check=False)
 
+
+def main():
+    recover()
     print("recovery complete: all nodes running, iptables rules flushed")
 
 

@@ -1,0 +1,12 @@
+{
+  "experiment_id": "C1-normal-MW-seed0",
+  "git_commit": "c6a3d24967f21edbe43dbb99e872c84db885381d",
+  "created_utc": "2026-09-23T14:33:32.379187+00:00",
+  "config": "C1",
+  "scenario": "normal",
+  "property": "MW",
+  "trials": 3,
+  "seed": 0,
+  "causal": "on",
+  "read_target": "secondary"
+}
