@@ -18,7 +18,7 @@ def main():
     print(f"set: {status['set']}")
     for m in status["members"]:
         lag = ""
-        if primary_optime is not None and m["stateStr"] != "PRIMARY":
+        if primary_optime is not None and m["stateStr"] != "PRIMARY" and m["health"] == 1:
             lag_seconds = (primary_optime - m["optimeDate"]).total_seconds()
             lag = f" | lag_behind_primary_s={lag_seconds:.1f}"
         print(f"  {m['name']:<15} {m['stateStr']:<10} health={m['health']}{lag}")
