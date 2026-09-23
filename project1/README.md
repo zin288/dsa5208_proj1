@@ -66,7 +66,36 @@ Expect `mongo1 | PRIMARY`, `mongo2 | SECONDARY`, `mongo3 | SECONDARY`.
 
 Shared connection helpers and the C1–C4 read/write concern configurations live in
 [script/common.py](../script/common.py). Experiment and fault-injection scripts live in
-[script/](../script/) (see in-progress additions there).
+[script/](../script/):
+
+- `preflight.py`, `cluster_status.py` — health checks, run before/after any batch.
+- `fault_secondary_down.py`, `fault_primary_down.py`, `fault_partition.py`, `fault_recover.py` —
+  manual fault injection (`fault_recover.py` always cleans up; workload scripts call it
+  automatically via `scenarios.py`).
+- `test_ryw.py`, `test_monotonic_reads.py`, `test_monotonic_writes.py`,
+  `test_writes_follow_reads.py` — one workload each, e.g.:
+  ```powershell
+  .\.venv\Scripts\python.exe script\test_ryw.py --config C3 --scenario normal --trials 30
+  ```
+  Common flags: `--config {C1..C4}`, `--scenario {normal,secondary_down,primary_down,partition}`,
+  `--trials N`, `--seed N`, `--causal {on,off}`, `--read-target {primary,secondary,delayed}`.
+- `run_matrix.py` — sweeps configs x properties x scenarios, e.g. a full formal run:
+  ```powershell
+  .\.venv\Scripts\python.exe script\run_matrix.py --trials 30
+  ```
+  Use `--configs`, `--properties`, `--scenarios` to restrict to a subset for smoke testing.
+
+Predictions made before running the formal matrix are recorded in
+[results/manifests/predictions.md](../results/manifests/predictions.md).
+
+Raw per-operation JSONL logs land in `results/raw/<experiment_id>.jsonl`; run manifests (config,
+scenario, trial count, seed, git commit) land in `results/manifests/<experiment_id>.json`.
+
+**Note:** mongo3 (priority 0, delayed secondary) does not appear in the replica-set client's
+discovered topology (absent from `hello`'s `hosts`/`passives` fields), so it can only be reached
+via a direct connection (`get_delayed_client()` in `common.py`), not via tag-based read preference
+on the normal replica-set client. Reads routed to `--read-target delayed` therefore do not share a
+causal `ClientSession` with the rest of the trial.
 
 ## Tear down
 
