@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from pymongo.read_preferences import Primary, Secondary
 
 from common import get_collection, get_delayed_client
+from experiment_lock import experiment_lock
 from logging_utils import JsonlLogger, write_manifest
 from scenarios import SCENARIOS, apply_scenario
 
@@ -71,7 +72,7 @@ def run_workload(property_name, args, get_client, trial_fn):
     delayed_client = get_delayed_client()
     causal = args.causal == "on"
 
-    with apply_scenario(args.scenario):
+    with experiment_lock(), apply_scenario(args.scenario):
         for trial_num in range(1, args.trials + 1):
             session = client.start_session(causal_consistency=causal) if causal else None
             try:
