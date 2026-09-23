@@ -23,7 +23,8 @@ PROPERTIES = {
 SCENARIOS = ["normal", "secondary_down", "primary_down", "partition"]
 
 SCRIPT_DIR = Path(__file__).parent
-MAX_ATTEMPTS = 3
+RESULTS_RAW_DIR = SCRIPT_DIR.parent / "results" / "raw"
+MAX_ATTEMPTS = 8
 RETRY_DELAY_S = 5
 
 
@@ -34,6 +35,8 @@ def main():
     parser.add_argument("--configs", nargs="+", default=CONFIGS, choices=CONFIGS)
     parser.add_argument("--properties", nargs="+", default=list(PROPERTIES), choices=list(PROPERTIES))
     parser.add_argument("--scenarios", nargs="+", default=SCENARIOS, choices=SCENARIOS)
+    parser.add_argument("--force", action="store_true",
+                         help="re-run a cell even if its result file already exists")
     args = parser.parse_args()
 
     cells = [
@@ -46,6 +49,12 @@ def main():
     print(f"running {len(cells)} cells x {args.trials} trials")
     failures = []
     for i, (config, prop, scenario) in enumerate(cells, start=1):
+        experiment_id = f"{config}-{scenario}-{prop}-seed{args.seed}"
+        result_path = RESULTS_RAW_DIR / f"{experiment_id}.jsonl"
+        if result_path.exists() and not args.force:
+            print(f"[{i}/{len(cells)}] {config} {prop} {scenario} - skip (already done: {result_path.name})")
+            continue
+
         script = SCRIPT_DIR / PROPERTIES[prop]
         cmd = [
             sys.executable, str(script),
