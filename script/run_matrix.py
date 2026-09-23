@@ -11,6 +11,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+from fault_recover import recover
+
 CONFIGS = ["C1", "C2", "C3", "C4"]
 PROPERTIES = {
     "RYW": "test_ryw.py",
@@ -21,6 +23,8 @@ PROPERTIES = {
 SCENARIOS = ["normal", "secondary_down", "primary_down", "partition"]
 
 SCRIPT_DIR = Path(__file__).parent
+MAX_ATTEMPTS = 3
+RETRY_DELAY_S = 5
 
 
 def main():
@@ -49,14 +53,23 @@ def main():
             "--trials", str(args.trials), "--seed", str(args.seed),
         ]
         print(f"[{i}/{len(cells)}] {config} {prop} {scenario}")
-        start = time.monotonic()
-        result = subprocess.run(cmd)
-        elapsed = time.monotonic() - start
-        if result.returncode != 0:
-            print(f"  FAILED (exit {result.returncode}, {elapsed:.1f}s)")
-            failures.append((config, prop, scenario))
+
+        for attempt in range(1, MAX_ATTEMPTS + 1):
+            start = time.monotonic()
+            result = subprocess.run(cmd)
+            elapsed = time.monotonic() - start
+            if result.returncode == 0:
+                print(f"  ok ({elapsed:.1f}s)")
+                break
+            print(f"  attempt {attempt}/{MAX_ATTEMPTS} FAILED (exit {result.returncode}, {elapsed:.1f}s)")
+            if attempt < MAX_ATTEMPTS:
+                # A failure is usually a stale lock/partition from a colliding process - recover
+                # the cluster and retry rather than leaving the whole matrix run stuck on one cell.
+                recover()
+                Path(script.parent.parent / ".experiment.lock").unlink(missing_ok=True)
+                time.sleep(RETRY_DELAY_S)
         else:
-            print(f"  ok ({elapsed:.1f}s)")
+            failures.append((config, prop, scenario))
 
     if failures:
         print(f"\n{len(failures)} cell(s) failed: {failures}")
