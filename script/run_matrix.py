@@ -12,6 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from fault_recover import recover
+from matrix_lock import acquire as acquire_matrix_lock
 
 CONFIGS = ["C1", "C2", "C3", "C4"]
 PROPERTIES = {
@@ -38,6 +39,7 @@ def main():
     parser.add_argument("--force", action="store_true",
                          help="re-run a cell even if its result file already exists")
     args = parser.parse_args()
+    acquire_matrix_lock()
 
     cells = [
         (config, prop, scenario)
