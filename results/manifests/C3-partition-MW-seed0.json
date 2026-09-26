@@ -1,0 +1,12 @@
+{
+  "experiment_id": "C3-partition-MW-seed0",
+  "git_commit": "9300b6df37bb80a4c1708c8e730d77ede5b83c3c",
+  "created_utc": "2026-09-24T14:42:41.387149+00:00",
+  "config": "C3",
+  "scenario": "partition",
+  "property": "MW",
+  "trials": 30,
+  "seed": 0,
+  "causal": "on",
+  "read_target": "secondary"
+}

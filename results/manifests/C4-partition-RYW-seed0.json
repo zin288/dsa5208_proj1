@@ -1,0 +1,12 @@
+{
+  "experiment_id": "C4-partition-RYW-seed0",
+  "git_commit": "e43d304479a4eda337a2dc0d8f580e2545f19363",
+  "created_utc": "2026-09-24T14:47:35.648153+00:00",
+  "config": "C4",
+  "scenario": "partition",
+  "property": "RYW",
+  "trials": 30,
+  "seed": 0,
+  "causal": "on",
+  "read_target": "delayed"
+}

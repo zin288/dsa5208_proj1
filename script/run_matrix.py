@@ -1,4 +1,4 @@
-"""Sweeps {C1..C4} x {RYW,MR,MW,WFR} x {normal, node-failure, partition} and runs each workload script.
+"""Sweep configurations, client properties, and scenarios with separate normal/fault sample sizes.
 
 Node-failure scenarios are split into secondary_down and primary_down, so this covers 4 scenarios
 per property/config cell. Recovery is guaranteed by scenarios.apply_scenario in each workload's harness.
@@ -8,6 +8,7 @@ import json
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -28,9 +29,9 @@ SCENARIOS = ["normal", "secondary_down", "primary_down", "partition"]
 
 SCRIPT_DIR = Path(__file__).parent
 RESULTS_RAW_DIR = SCRIPT_DIR.parent / "results" / "raw"
-MAX_ATTEMPTS = 8
+MAX_ATTEMPTS = 2
 RETRY_DELAY_S = 5
-DEFAULT_CELL_TIMEOUT_S = 3600
+DEFAULT_CELL_TIMEOUT_S = 21600
 
 
 def validate_completed_cell(experiment_id, trials, run_id):
@@ -81,16 +82,28 @@ def experiment_lock_is_free():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--trials", type=int, default=30)
+    parser.add_argument("--normal-trials", type=int, default=2000)
+    parser.add_argument("--fault-trials", type=int, default=30)
+    parser.add_argument("--trials", type=int, default=None,
+                        help="override both normal and fault trial counts (useful for smoke tests)")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--configs", nargs="+", default=CONFIGS, choices=CONFIGS)
     parser.add_argument("--properties", nargs="+", default=list(PROPERTIES), choices=list(PROPERTIES))
     parser.add_argument("--scenarios", nargs="+", default=SCENARIOS, choices=SCENARIOS)
-    parser.add_argument("--run-id", default=None, help="unique label separating independent batches")
+    parser.add_argument("--run-id", default=None,
+                        help="unique batch label (generated automatically if omitted)")
     parser.add_argument("--cell-timeout-seconds", type=int, default=DEFAULT_CELL_TIMEOUT_S)
+    parser.add_argument("--plan", action="store_true", help="print planned cell/trial counts without running")
     args = parser.parse_args()
-    acquire_matrix_lock()
-
+    if args.trials is not None:
+        if args.trials < 1:
+            parser.error("--trials must be positive")
+        args.normal_trials = args.trials
+        args.fault_trials = args.trials
+    if args.normal_trials < 1 or args.fault_trials < 1:
+        parser.error("--normal-trials and --fault-trials must be positive")
+    if args.run_id is None:
+        args.run_id = datetime.now(timezone.utc).strftime("matrix-%Y%m%dT%H%M%SZ")
     cells = [
         (config, prop, scenario)
         for config in args.configs
@@ -98,12 +111,27 @@ def main():
         for scenario in args.scenarios
     ]
 
-    print(f"running {len(cells)} cells x {args.trials} trials")
+    normal_cells = sum(scenario == "normal" for _, _, scenario in cells)
+    fault_cells = len(cells) - normal_cells
+    planned_trials = normal_cells * args.normal_trials + fault_cells * args.fault_trials
+    print(
+        f"run_id={args.run_id}; cells={len(cells)}; "
+        f"normal={normal_cells} x {args.normal_trials}; "
+        f"fault/partition={fault_cells} x {args.fault_trials}; "
+        f"planned_trials={planned_trials}",
+        flush=True,
+    )
+    if args.plan:
+        return
+
+    acquire_matrix_lock()
+
     failures = []
     for i, (config, prop, scenario) in enumerate(cells, start=1):
-        run_component = f"-{args.run_id}" if args.run_id else ""
+        cell_trials = args.normal_trials if scenario == "normal" else args.fault_trials
+        run_component = f"-{args.run_id}"
         experiment_id = f"{config}-{scenario}-{prop}{run_component}-seed{args.seed}"
-        if validate_completed_cell(experiment_id, args.trials, args.run_id):
+        if validate_completed_cell(experiment_id, cell_trials, args.run_id):
             print(f"[{i}/{len(cells)}] {config} {prop} {scenario} - skip (validated complete)", flush=True)
             continue
 
@@ -111,11 +139,13 @@ def main():
         cmd = [
             sys.executable, str(script),
             "--config", config, "--scenario", scenario,
-            "--trials", str(args.trials), "--seed", str(args.seed),
+            "--trials", str(cell_trials), "--seed", str(args.seed),
         ]
-        if args.run_id:
-            cmd.extend(["--run-id", args.run_id])
-        print(f"[{i}/{len(cells)}] {config} {prop} {scenario}", flush=True)
+        cmd.extend(["--run-id", args.run_id])
+        print(
+            f"[{i}/{len(cells)}] {config} {prop} {scenario} ({cell_trials} trials)",
+            flush=True,
+        )
 
         for attempt in range(1, MAX_ATTEMPTS + 1):
             start = time.monotonic()

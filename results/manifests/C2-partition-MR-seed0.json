@@ -1,0 +1,12 @@
+{
+  "experiment_id": "C2-partition-MR-seed0",
+  "git_commit": "760cd9367d6cd1892ea0bc2165f6615368d24930",
+  "created_utc": "2026-09-23T23:50:21.344997+00:00",
+  "config": "C2",
+  "scenario": "partition",
+  "property": "MR",
+  "trials": 30,
+  "seed": 0,
+  "causal": "on",
+  "read_target": null
+}

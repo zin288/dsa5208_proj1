@@ -79,52 +79,74 @@ Shared connection helpers and the C1–C4 read/write concern configurations live
   ```
   Common flags: `--config {C1..C4}`, `--scenario {normal,secondary_down,primary_down,partition}`,
   `--trials N`, `--seed N`, `--causal {on,off}`, `--read-target {primary,secondary,delayed}`.
-- `run_matrix.py` — sweeps configs x properties x scenarios, e.g. a full formal run:
+- `run_matrix.py` — runs the complete 64-cell matrix in one command. By default, normal-operation
+  cells use 2,000 trials and node-failure/partition cells use 30 trials:
   ```powershell
-  .\.venv\Scripts\python.exe script\run_matrix.py --trials 30
+  .\.venv\Scripts\python.exe script\run_matrix.py 2>&1 | Tee-Object -FilePath results\run_full_matrix.log
   ```
-  Use `--configs`, `--properties`, and `--scenarios` to restrict a run. `--run-id` gives a batch
-  a distinct output namespace; choose a new value if the requested trial count differs from an
-  existing batch. The runner validates each manifest and trial-ID coverage before skipping a cell,
-  uses OS-managed locks to reject concurrent runs, publishes raw JSONL only after a cell completes,
-  and enforces a default one-hour per-cell timeout (`--cell-timeout-seconds` can override it).
+  To inspect the workload without running it:
+  ```powershell
+  .\.venv\Scripts\python.exe script\run_matrix.py --plan
+  ```
+  This is 16 normal cells x 2,000 trials plus 48 fault/partition cells x 30 trials, for 33,440
+  planned trials. The runner prints its generated run ID and per-cell progress. Use `--normal-trials`
+  or `--fault-trials` to adjust sample counts; `--configs`, `--properties`, and `--scenarios` can
+  restrict a run. `--trials N` overrides both trial counts and is useful for smoke tests. Each run
+  gets an automatic unique ID; pass `--run-id` to set one explicitly. The runner validates manifests
+  and trial-ID coverage before skipping completed cells, uses OS-managed locks to reject concurrent
+  runs, and publishes raw JSONL only after a cell completes. Cells have a six-hour timeout and at
+  most one retry (`--cell-timeout-seconds` can override the timeout). If a run is interrupted, resume
+  it with the same `--run-id` printed at startup; otherwise a new ID starts a separate batch.
 
-### P95 latency run
+### Sampling and latency analysis
 
-The p95 extension measures normal-operation latency for all four consistency configurations and
-all four workloads: 16 cells, with 2,000 trials per cell (32,000 trials total). Each operation
-type and target node is summarized separately; reads and writes are not pooled. The estimator uses
-linear interpolation at position `(n - 1) * 0.95`. Failed operations and timeouts are excluded from
-the successful-operation percentile and reported in a separate count. At 2,000 successful samples,
-roughly 100 observations lie in the upper 5% tail.
+Normal-operation cells use 2,000 trials to provide a larger latency sample for later analysis.
+Fault/partition cells retain 30 trials because each cell injects one sustained fault episode and
+performs its operations during that episode. More trials in that same episode would not constitute
+more independent failures and would substantially increase runtime. These fault-cell samples are
+for consistency outcomes and errors; they are not intended as robust tail-latency estimates.
+
+### Optional repeated fault episodes
+
+The main matrix injects one sustained fault per fault cell. To assess whether observations repeat
+across independent failure/recovery cycles, use the optional episode runner:
+
+```powershell
+.\.venv\Scripts\python.exe script\run_fault_episodes.py --plan
+.\.venv\Scripts\python.exe script\run_fault_episodes.py 2>&1 | Tee-Object -FilePath results\run_fault_episodes.log
+```
+
+By default it compares C1 and C3, runs all four properties under secondary-down, primary-down,
+and partition scenarios, and repeats each combination for three episodes with ten trials per
+episode. That is 72 independently injected episodes and 720 operation trials. The cluster is
+recovered and must show one healthy primary, two healthy secondaries, and bounded replica lag in
+two consecutive checks before the next episode starts. Use `--configs`, `--properties`,
+`--scenarios`, `--episodes`, and `--trials-per-episode` to adjust the scope. Each episode gets its
+own run ID and raw log/manifest. This is a focused follow-up, not a replacement for the full matrix;
+it does not claim that ten operations within one episode are ten independent failures.
 
 Latency is measured with Python's high-resolution monotonic `time.perf_counter_ns()` clock. Its
 source and reported resolution are stored in each manifest. The initial batch used
 `time.monotonic_ns()`, which this Python 3.10.9 Windows environment reports at only 15.625 ms
-resolution; its quantized output is preserved for audit but should not be used for p95 conclusions.
+resolution; that earlier quantized batch is retained for audit but should not be used for latency
+percentile conclusions.
 
-Run the p95 batch with a unique label:
-
-```powershell
-.\.venv\Scripts\python.exe script\run_matrix.py --configs C1 C2 C3 C4 --properties RYW MR MW WFR --scenarios normal --trials 2000 --run-id p95-hires-20260926 2>&1 | Tee-Object -FilePath results\run_p95_hires_2000.log
-```
-
-The run creates one JSONL file and manifest for each cell. After it completes, produce the CSV:
+After a completed matrix run, the analysis owner can calculate latency percentiles separately by
+configuration, property, scenario, operation, and target node:
 
 ```powershell
-.\.venv\Scripts\python.exe script\analyze_latency.py --run-id p95-hires-20260926
+.\.venv\Scripts\python.exe script\analyze_latency.py --run-id matrix-YYYYMMDDTHHMMSSZ
 ```
 
-The summary is written to `results/processed/p95-p95-hires-20260926.csv`. Review the successful sample
-count for every operation group before interpreting its p95; groups with few successful samples
-should not be compared as if they had 2,000 observations. This p95 batch is for normal operation.
-The existing primary-failure, secondary-failure, and partition runs remain the consistency/fault
-experiments; a long batch under one injected fault would not represent many independent fault
-episodes. For failure scenarios, report each fault episode and failover/recovery duration separately.
+The summary CSV is written under `results/processed/`. Interpret normal-operation groups using
+their 2,000 observations. Fault/partition groups have 30 observations and must be described with
+that sample size; they do not support equally stable tail-percentile claims. Failed operations and
+timeouts are counted separately from successful-operation latency.
 
-The completed high-resolution batch used run ID `p95-hires-20260926`; its 16 cell logs and manifests
-are under `results/raw/` and `results/manifests/`. The earlier `p95-20260926` batch is retained as
-raw audit data but uses the coarse Windows monotonic clock and is not the dataset for p95 conclusions.
+The earlier standalone normal-only high-sample batch and the 64-cell 30-trial matrix remain in the
+results tree as separate historical runs. They are not the combined 33,440-trial run described
+above. The combined run is planned but has not been started; a new invocation of the default
+command above collects both sampling levels under one run ID without overwriting historical data.
 
 The matrix and workload scripts use local OS-managed locks, so duplicate invocations in this
 workspace are rejected and the locks are automatically released when the owning process exits.

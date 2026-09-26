@@ -5,3 +5,6 @@ __pycache__/
 *.log
 .matrix.lock
 .experiment.lock
+results/raw/
+results/manifests/*.json
+results/processed/*.csv

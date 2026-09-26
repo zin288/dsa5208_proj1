@@ -1,0 +1,12 @@
+{
+  "experiment_id": "C1-normal-WFR-seed0",
+  "git_commit": "358a291ed9bde523b2bb8adf642d8d5ba49f71b9",
+  "created_utc": "2026-09-23T14:57:58.357723+00:00",
+  "config": "C1",
+  "scenario": "normal",
+  "property": "WFR",
+  "trials": 30,
+  "seed": 0,
+  "causal": "on",
+  "read_target": "delayed"
+}
