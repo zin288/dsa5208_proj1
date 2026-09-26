@@ -47,7 +47,7 @@ from fault_partition import partition
 from fault_recover import recover
 from logging_utils import JsonlLogger, timed_op, write_manifest
 from run_fault_episodes import wait_for_healthy_cluster
-from workload_common import classify_error
+from workload_common import classify_error, find_one_bounded
 
 PROPERTY = "MW"
 
@@ -64,6 +64,8 @@ def build_arg_parser():
                         help="seconds to wait after the fault for step-down/election before v3")
     parser.add_argument("--settle-ms", type=int, default=15000,
                         help="post-recovery pause so rollback and the delayed member can catch up before the final read")
+    parser.add_argument("--read-timeout-ms", type=int, default=10000,
+                        help="server-side maximum duration for the final read")
     parser.add_argument("--recovery-timeout-seconds", type=int, default=180)
     return parser
 
@@ -152,7 +154,9 @@ def run_fault_trial(client, trial_num, logger, experiment_id, args):
         read_client = get_normal_client()
         try:
             read_col = get_collection(read_client, args.config).with_options(read_preference=Primary())
-            doc, error, inv, resp, latency = timed_op(lambda: read_col.find_one({"_id": key}))
+            doc, error, inv, resp, latency = timed_op(
+                lambda: find_one_bounded(read_col, key, None, args.read_timeout_ms)
+            )
             final_n = doc["n"] if doc else None
             logger.log(trial=trial_num, client_id="client-A", session_id=None,
                        session_transmitted=False, operation="final_read", key=key,
@@ -205,6 +209,7 @@ def main():
         fault_point="after_v1",
         election_wait_s=args.election_wait_s,
         settle_ms=args.settle_ms,
+        read_timeout_ms=args.read_timeout_ms,
         latency_clock="perf_counter_ns",
     )
     with experiment_lock():

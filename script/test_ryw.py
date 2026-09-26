@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from common import get_collection, get_normal_client, new_trial_id
 from logging_utils import timed_op
-from workload_common import build_arg_parser, classify_error, get_read_collection, run_workload
+from workload_common import build_arg_parser, classify_error, find_one_bounded, get_read_collection, run_workload
 
 PROPERTY = "RYW"
 
@@ -85,7 +85,9 @@ def trial(client, delayed_client, session, trial_num, logger, experiment_id, arg
         time.sleep(args.post_write_delay_ms / 1000)
 
     def do_read():
-        return read_col.find_one({"_id": key}, session=session if session_supported else None)
+        return find_one_bounded(
+            read_col, key, session if session_supported else None, args.read_timeout_ms
+        )
 
     doc, error, inv, resp, latency = timed_op(do_read)
     returned_version = doc["version"] if doc else None

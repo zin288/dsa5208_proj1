@@ -99,6 +99,9 @@ Shared connection helpers and the C1–C4 read/write concern configurations live
   runs, and publishes raw JSONL only after a cell completes. Cells have a six-hour timeout and at
   most one retry (`--cell-timeout-seconds` can override the timeout). If a run is interrupted, resume
   it with the same `--run-id` printed at startup; otherwise a new ID starts a separate batch.
+   Individual reads have a 10-second server-side limit by default (`--read-timeout-ms` overrides it),
+   so a causal read waiting on an unreplicated write during a partition is logged as a timeout rather
+   than blocking that cell indefinitely.
 
 ### Revised workloads (branch `revised`)
 
@@ -200,6 +203,22 @@ retroactively for pre-revision logs), run:
 
 This writes `results/processed/trial_summary.csv` and flags any cell with trial
 shortfalls, duplicated operation records, or a non-complete manifest status.
+
+To give the analysis owner an unambiguous file map for the 64 consistency cells,
+run:
+
+```powershell
+.\.venv\Scripts\python.exe script\build_results_index.py
+```
+
+This validates manifests and trial-ID coverage, then writes
+`results/processed/latest_results.csv`. It selects the completed main matrix for
+the consistency cells, substitutes the corrected MR rerun for C2-C4 MR cells,
+and lists the high-resolution normal-operation latency logs separately. Each row
+contains the selected run ID, raw JSONL and manifest paths, trial/status counts,
+and (for normal cells) the separate latency-data paths. If the curated run IDs
+change, provide `--core-run-id`, `--corrected-mr-run-id`, and `--latency-run-id`.
+The current generated index is [latest_results.csv](../results/processed/latest_results.csv).
 
 The earlier standalone normal-only high-sample batch and the 64-cell 30-trial matrix remain in the
 results tree as separate historical runs. They are not the combined 33,440-trial run described

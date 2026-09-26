@@ -34,7 +34,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from common import get_collection, get_normal_client, new_trial_id
 from logging_utils import timed_op
 from scenarios import SCENARIOS
-from workload_common import classify_error, get_read_collection, run_workload
+from workload_common import classify_error, find_one_bounded, get_read_collection, run_workload
 
 PROPERTY = "MR"
 
@@ -51,6 +51,8 @@ def build_arg_parser():
                         default="secondary")
     parser.add_argument("--second-read-target", choices=["primary", "secondary", "delayed"],
                         default="secondary")
+    parser.add_argument("--read-timeout-ms", type=int, default=10000,
+                        help="server-side maximum duration for an individual read")
     parser.add_argument("--settle-ms", type=int, default=0,
                         help="pause between the v0 insert and the v1 update, so a lagging second-read target can hold v0 but not v1")
     parser.add_argument("--read-target", default=None, help=argparse.SUPPRESS)  # for manifest compat
@@ -114,7 +116,9 @@ def trial(client, delayed_client, session, trial_num, logger, experiment_id, arg
         read_col, session_supported = get_read_collection(client, delayed_client, args.config, target)
 
         def do_read(col=read_col, use_session=session_supported):
-            return col.find_one({"_id": key}, session=session if use_session else None)
+            return find_one_bounded(
+                col, key, session if use_session else None, args.read_timeout_ms
+            )
 
         doc, error, inv, resp, latency = timed_op(do_read)
         returned_version = doc["version"] if doc else None

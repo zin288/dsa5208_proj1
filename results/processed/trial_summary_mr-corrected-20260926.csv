@@ -1,0 +1,13 @@
+experiment_id,run_id,config,scenario,property,read_target,causal,causal_session_effective_for_reads,manifest_status,git_commit,planned_trials,observed_trials,duplicate_op_records,valid_observation,in_order,read_miss,precondition_unmatched,acked_write_lost,interrupted,timeout,operation_error,indeterminate,not_executed,decidable_trials,observed_violations
+C2-normal-MR-mr-corrected-20260926-seed0,mr-corrected-20260926,C2,normal,MR,,on,True,complete,4355a83ed18665a0f441b2b25785eabb51a560e2,2000,2000,0,2000,0,0,0,0,0,0,0,0,0,2000,0
+C2-partition-MR-mr-corrected-20260926-seed0,mr-corrected-20260926,C2,partition,MR,,on,True,complete,4355a83ed18665a0f441b2b25785eabb51a560e2,30,30,0,0,0,0,0,0,0,30,0,0,0,0,0
+C2-primary_down-MR-mr-corrected-20260926-seed0,mr-corrected-20260926,C2,primary_down,MR,,on,True,complete,4355a83ed18665a0f441b2b25785eabb51a560e2,30,30,0,0,0,0,0,0,0,30,0,0,0,0,0
+C2-secondary_down-MR-mr-corrected-20260926-seed0,mr-corrected-20260926,C2,secondary_down,MR,,on,True,complete,4355a83ed18665a0f441b2b25785eabb51a560e2,30,30,0,30,0,0,0,0,0,0,0,0,0,30,0
+C3-normal-MR-mr-corrected-20260926-seed0,mr-corrected-20260926,C3,normal,MR,,on,True,complete,4355a83ed18665a0f441b2b25785eabb51a560e2,2000,2000,0,2000,0,0,0,0,0,0,0,0,0,2000,0
+C3-partition-MR-mr-corrected-20260926-seed0,mr-corrected-20260926,C3,partition,MR,,on,True,complete,4355a83ed18665a0f441b2b25785eabb51a560e2,30,30,0,0,0,0,0,0,0,30,0,0,0,0,0
+C3-primary_down-MR-mr-corrected-20260926-seed0,mr-corrected-20260926,C3,primary_down,MR,,on,True,complete,4355a83ed18665a0f441b2b25785eabb51a560e2,30,30,0,0,0,0,0,0,0,30,0,0,0,0,0
+C3-secondary_down-MR-mr-corrected-20260926-seed0,mr-corrected-20260926,C3,secondary_down,MR,,on,True,complete,4355a83ed18665a0f441b2b25785eabb51a560e2,30,30,0,30,0,0,0,0,0,0,0,0,0,30,0
+C4-normal-MR-mr-corrected-20260926-seed0,mr-corrected-20260926,C4,normal,MR,,on,True,complete,4355a83ed18665a0f441b2b25785eabb51a560e2,2000,2000,0,1998,0,0,0,0,0,1,1,0,0,1998,0
+C4-partition-MR-mr-corrected-20260926-seed0,mr-corrected-20260926,C4,partition,MR,,on,True,complete,4355a83ed18665a0f441b2b25785eabb51a560e2,30,30,0,0,0,0,0,0,0,30,0,0,0,0,0
+C4-primary_down-MR-mr-corrected-20260926-seed0,mr-corrected-20260926,C4,primary_down,MR,,on,True,complete,4355a83ed18665a0f441b2b25785eabb51a560e2,30,30,0,0,0,0,0,0,0,30,0,0,0,0,0
+C4-secondary_down-MR-mr-corrected-20260926-seed0,mr-corrected-20260926,C4,secondary_down,MR,,on,True,complete,4355a83ed18665a0f441b2b25785eabb51a560e2,30,30,0,30,0,0,0,0,0,0,0,0,0,30,0

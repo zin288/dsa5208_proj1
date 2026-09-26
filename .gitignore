@@ -8,3 +8,4 @@ __pycache__/
 results/raw/
 results/manifests/*.json
 results/processed/*.csv
+!results/processed/latest_results.csv

@@ -45,6 +45,8 @@ def build_arg_parser(description, default_read_target="secondary"):
     parser.add_argument("--causal", choices=["on", "off"], default="on")
     parser.add_argument("--read-target", choices=["primary", "secondary", "delayed"],
                          default=default_read_target)
+    parser.add_argument("--read-timeout-ms", type=int, default=10000,
+                        help="server-side maximum duration for an individual read")
     return parser
 
 
@@ -68,7 +70,7 @@ def manifest_fields(args):
     delayed read target makes this False regardless of --causal on.
     """
     fields = {}
-    for name in ("read_target", "first_read_target", "second_read_target", "settle_ms",
+    for name in ("read_target", "first_read_target", "second_read_target", "read_timeout_ms", "settle_ms",
                  "pre_write_pause_ms", "post_write_delay_ms"):
         value = getattr(args, name, None)
         if value is not None:
@@ -80,6 +82,12 @@ def manifest_fields(args):
             args.causal == "on" and "delayed" not in targets
         )
     return fields
+
+
+def find_one_bounded(collection, key, session, timeout_ms):
+    """Limit server time spent waiting for a read's causal/read-concern condition."""
+    cursor = collection.find({"_id": key}, session=session, max_time_ms=timeout_ms).limit(1)
+    return next(cursor, None)
 
 
 def make_experiment_id(property_name, args):
@@ -94,23 +102,23 @@ def run_workload(property_name, args, get_client, trial_fn):
     random.seed(args.seed)
     experiment_id = make_experiment_id(property_name, args)
     extras = manifest_fields(args)
+    manifest_data = {
+        "config": args.config,
+        "scenario": args.scenario,
+        "property": property_name,
+        "trials": args.trials,
+        "seed": args.seed,
+        "run_id": args.run_id,
+        "causal": args.causal,
+        "read_target": args.read_target,
+        "latency_clock": "perf_counter_ns",
+        "latency_clock_resolution_ns": time.get_clock_info("perf_counter").resolution * 1e9,
+    }
+    manifest_data.update(extras)
+
     with experiment_lock():
         logger = JsonlLogger(experiment_id, run_id=args.run_id)
-        write_manifest(
-            experiment_id,
-            config=args.config,
-            scenario=args.scenario,
-            property=property_name,
-            trials=args.trials,
-            seed=args.seed,
-            run_id=args.run_id,
-            causal=args.causal,
-            read_target=args.read_target,
-            latency_clock="perf_counter_ns",
-            latency_clock_resolution_ns=time.get_clock_info("perf_counter").resolution * 1e9,
-            status="running",
-            **extras,
-        )
+        write_manifest(experiment_id, status="running", **manifest_data)
 
         client = get_client()
         delayed_client = get_delayed_client()
@@ -126,21 +134,7 @@ def run_workload(property_name, args, get_client, trial_fn):
                         if session is not None:
                             session.end_session()
             logger.finalize()
-            write_manifest(
-                experiment_id,
-                config=args.config,
-                scenario=args.scenario,
-                property=property_name,
-                trials=args.trials,
-                seed=args.seed,
-                run_id=args.run_id,
-                causal=args.causal,
-                read_target=args.read_target,
-                latency_clock="perf_counter_ns",
-                latency_clock_resolution_ns=time.get_clock_info("perf_counter").resolution * 1e9,
-                status="complete",
-                **extras,
-            )
+            write_manifest(experiment_id, status="complete", **manifest_data)
         finally:
             client.close()
             delayed_client.close()

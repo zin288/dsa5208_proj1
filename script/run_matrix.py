@@ -88,12 +88,14 @@ def experiment_lock_is_free():
 # Only flags the target script actually defines are forwarded for that property,
 # and cell-level flags (appended last) override the global passthrough.
 GLOBAL_FLAGS = {
-    "RYW": {"--read-target": "read_target"},
+    "RYW": {"--read-target": "read_target", "--read-timeout-ms": "read_timeout_ms"},
     "MR": {"--first-read-target": "first_read_target",
            "--second-read-target": "second_read_target",
-           "--settle-ms": "settle_ms"},
+        "--settle-ms": "settle_ms",
+        "--read-timeout-ms": "read_timeout_ms"},
     "MW": {},
-    "WFR": {"--read-target": "read_target", "--settle-ms": "settle_ms"},
+    "WFR": {"--read-target": "read_target", "--settle-ms": "settle_ms",
+         "--read-timeout-ms": "read_timeout_ms"},
 }
 
 MW_FAULT_SCRIPT = "test_monotonic_writes_fault.py"
@@ -178,6 +180,8 @@ def main():
     parser.add_argument("--first-read-target", choices=["primary", "secondary", "delayed"], default=None)
     parser.add_argument("--second-read-target", choices=["primary", "secondary", "delayed"], default=None)
     parser.add_argument("--settle-ms", type=int, default=None)
+    parser.add_argument("--read-timeout-ms", type=int, default=None,
+                        help="override the workload read maxTimeMS (default 10000ms)")
     args = parser.parse_args()
     if args.trials is not None:
         if args.trials < 1:
