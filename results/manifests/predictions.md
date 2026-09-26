@@ -35,3 +35,26 @@ run will show a violation.
   never as "proven to hold" - see workflow §13.3/§18.
 - Timeouts/errors (`success=false`) are reported separately from violation counts; they are not
   silently treated as violations.
+
+## Revised-batch predictions (pre-registered 2026-09-26, before any revised run)
+
+Written after the workload-semantics revision and BEFORE the `--preset revised` batch is run.
+The original table above assumed causally consistent sessions, but the original workloads'
+default delayed read path could not carry the session; the revised batch puts the read path
+back inside the session, so the original table finally describes what is actually run.
+These predictions are about the REVISED verdict semantics (`trial_status` + decidable
+violation flags), not the old conflation of read-miss/error with violation.
+
+| Batch | Configs | Prediction | Rationale | Observable judgment |
+|---|---|---|---|---|
+| same-session RYW, normal, secondary read | C1, C2 | no violation observed in N trials | causal session + majority read concern makes the secondary wait for the session's write | all trials `trial_status=valid_observation`, `ryw_violation=false` |
+| same-session RYW, normal, secondary read | C3, C4 | not guaranteed; violations possible but may not be observed on a healthy small cluster | local read concern does not force the secondary past the session's write time | any `ryw_violation=true` (stale version) or `read_miss` reported separately, not as violation |
+| same-session MR, normal, secondary/secondary | C1, C2 | no violation observed | majority read concern is monotone across the session's reads | all trials `valid_observation`, `mr_violation=false` |
+| same-session MR, normal, secondary/secondary | C3, C4 | not guaranteed; regression unlikely to be observed without injected lag | local reads on an up-to-date secondary rarely regress in a healthy cluster | `mr_violation=true` only if a genuine version regression occurs |
+| same-session WFR, normal, secondary read | C1-C4 | sequence forms; no violation observed | baseline v0 is immediately readable on a fresh secondary, derived CAS matches | `write_derived` executed, `trial_status=valid_observation` |
+| MW mid-sequence partition (test_monotonic_writes_fault) | C2, C3 (w:1) | `acked_write_lost` expected on most trials | v2 is acknowledged by the isolated old primary only, rolls back on rejoin; v3 persists from the majority side | final n=2 with three acknowledgements: `mw_violation=true`, `trial_status=acked_write_lost` |
+| MW mid-sequence partition | C1, C4 (majority) | no acked-write loss; v2/v3 writes time out instead | majority concern cannot be satisfied while the delayed voting member is unreachable, so the client sees wtimeout rather than data loss | `trial_status=timeout` on faulted writes, final n=1, availability cost documented |
+| delayed-contrast RYW/MR/WFR (optional cells) | any config | `read_miss` or stale-version observations on the no-session path | the direct delayed connection carries no causal session and lags 10 s | `trial_status=read_miss` dominant at 0 settle; stale version only inside the timed window |
+
+Reminder: for C3/C4 "not guaranteed" remains a theoretical statement; a run of N trials
+without violations is reported as "no violation observed in N trials", never as proof.

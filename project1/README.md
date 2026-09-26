@@ -73,13 +73,14 @@ Shared connection helpers and the C1–C4 read/write concern configurations live
   manual fault injection (`fault_recover.py` always cleans up; workload scripts call it
   automatically via `scenarios.py`).
 - `test_ryw.py`, `test_monotonic_reads.py`, `test_monotonic_writes.py`,
-  `test_writes_follow_reads.py` — one workload each, e.g.:
+  `test_writes_follow_reads.py`, `test_monotonic_writes_fault.py` — one workload each, e.g.:
   ```powershell
   .\.venv\Scripts\python.exe script\test_ryw.py --config C3 --scenario normal --trials 30
   ```
   Common flags: `--config {C1..C4}`, `--scenario {normal,secondary_down,primary_down,partition}`,
   `--trials N`, `--seed N`, `--causal {on,off}`, `--read-target {primary,secondary,delayed}`.
-- `run_matrix.py` — runs the complete 64-cell matrix in one command. By default, normal-operation
+- `run_matrix.py` — runs the complete 64-cell matrix in one command, or the
+  `--preset revised` priority batch (see "Revised workloads" below). By default, normal-operation
   cells use 2,000 trials and node-failure/partition cells use 30 trials:
   ```powershell
   .\.venv\Scripts\python.exe script\run_matrix.py 2>&1 | Tee-Object -FilePath results\run_full_matrix.log
@@ -87,6 +88,7 @@ Shared connection helpers and the C1–C4 read/write concern configurations live
   To inspect the workload without running it:
   ```powershell
   .\.venv\Scripts\python.exe script\run_matrix.py --plan
+  .\.venv\Scripts\python.exe script\run_matrix.py --plan --preset revised
   ```
   This is 16 normal cells x 2,000 trials plus 48 fault/partition cells x 30 trials, for 33,440
   planned trials. The runner prints its generated run ID and per-cell progress. Use `--normal-trials`
@@ -97,6 +99,52 @@ Shared connection helpers and the C1–C4 read/write concern configurations live
   runs, and publishes raw JSONL only after a cell completes. Cells have a six-hour timeout and at
   most one retry (`--cell-timeout-seconds` can override the timeout). If a run is interrupted, resume
   it with the same `--run-id` printed at startup; otherwise a new ID starts a separate batch.
+
+### Revised workloads (branch `revised`)
+
+The 2026-09-26 review of the historical batches found that the original workload
+verdicts conflated several distinct outcomes. The revised workloads fix the
+semantics; **historical logs remain untouched and are summarized with corrected
+labels by `summarize_trials.py`**. Changes:
+
+1. Every trial ends with a `*_check` record carrying `trial_status`:
+   `valid_observation`, `in_order`, `read_miss`, `precondition_unmatched`,
+   `acked_write_lost`, `interrupted`, `timeout`, `operation_error`, `indeterminate`.
+   Violation flags are True only on decidable observations. An empty read
+   (`read_miss`) or a failed operation is never counted as a consistency violation.
+2. RYW now writes a v0 baseline before the tested v1 write, so a stale non-null
+   version is actually observable (`--pre-write-pause-ms` / `--post-write-delay-ms`
+   place the delayed read inside the v0-not-v1 window, e.g. 11000/1000).
+   Default read target changed `delayed` -> `secondary` (same-session path).
+3. MR now creates two versions (v0 baseline, settle, v1) before read1/read2, so a
+   version regression is possible at all; `--settle-ms 11000 --second-read-target
+   delayed` lands read2 in the window where the delayed member has v0 but not v1.
+   Defaults changed to secondary/secondary (same-session path).
+4. WFR no longer marks `read_miss`/read errors as violations; `--settle-ms` lets a
+   delayed read target return the baseline so the derived write actually happens.
+5. New `test_monotonic_writes_fault.py`: the fault lands BETWEEN the client's
+   `$inc` writes (partition or primary_down after v1), making w:1 rollback loss
+   observable via the final counter. Each trial is an independent episode.
+6. Manifests now record `first_read_target`/`second_read_target`/`settle_ms` and
+   `causal_session_effective_for_reads` (False whenever a delayed target is used,
+   because the direct connection cannot carry the session).
+
+Priority rerun batch (~45 min total; commit first so manifests record the SHA):
+
+```powershell
+git add -A; git commit -m "revised workloads"
+.\.venv\Scripts\python.exe script\run_matrix.py --preset revised 2>&1 | Tee-Object -FilePath results\run_revised.log
+```
+
+This runs 12 same-session normal cells (200 trials each; the path the C1–C4
+prediction table describes) plus 4 MW mid-sequence partition cells (10 independent
+episodes each). Optional delayed-path contrast cells:
+
+```powershell
+.\.venv\Scripts\python.exe script\test_ryw.py --config C3 --scenario normal --trials 5 --run-id delayed-contrast --read-target delayed --pre-write-pause-ms 11000 --post-write-delay-ms 1000
+.\.venv\Scripts\python.exe script\test_monotonic_reads.py --config C3 --scenario normal --trials 5 --run-id delayed-contrast --second-read-target delayed --settle-ms 11000
+.\.venv\Scripts\python.exe script\test_writes_follow_reads.py --config C3 --scenario normal --trials 5 --run-id delayed-contrast --read-target delayed --settle-ms 11000
+```
 
 ### Sampling and latency analysis
 
@@ -142,6 +190,16 @@ The summary CSV is written under `results/processed/`. Interpret normal-operatio
 their 2,000 observations. Fault/partition groups have 30 observations and must be described with
 that sample size; they do not support equally stable tail-percentile claims. Failed operations and
 timeouts are counted separately from successful-operation latency.
+
+For per-cell trial outcomes (with the corrected `trial_status` labels, derived
+retroactively for pre-revision logs), run:
+
+```powershell
+.\.venv\Scripts\python.exe script\summarize_trials.py
+```
+
+This writes `results/processed/trial_summary.csv` and flags any cell with trial
+shortfalls, duplicated operation records, or a non-complete manifest status.
 
 The earlier standalone normal-only high-sample batch and the 64-cell 30-trial matrix remain in the
 results tree as separate historical runs. They are not the combined 33,440-trial run described

@@ -3,6 +3,12 @@
 A CAS write (`update_one({_id, version: prev}, {$set: {version: next}})`) failing to match is
 evidence the previous write's effect was not visible/durable when the next write was attempted -
 the observable proxy for a monotonic-writes violation, since we cannot inspect internal ordering.
+
+Trial classification (trial_status on the final mw_check record):
+- in_order: every CAS matched; the sequence took effect in order.
+- precondition_unmatched: a CAS found no matching predecessor while writes kept
+  succeeding - the proxy described above, kept separate from hard violations.
+- operation_error / timeout: a write failed; the trial judges nothing about ordering.
 """
 import sys
 from pathlib import Path
@@ -11,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from common import get_collection, get_normal_client, new_trial_id
 from logging_utils import timed_op
-from workload_common import build_arg_parser, run_workload
+from workload_common import build_arg_parser, classify_error, run_workload
 
 PROPERTY = "MW"
 
@@ -35,8 +41,16 @@ def trial(client, delayed_client, session, trial_num, logger, experiment_id, arg
         topology_state=args.scenario,
     )
     if error is not None:
+        logger.log(
+            trial=trial_num, client_id="client-A", session_id=session_id,
+            operation="mw_check", key=key, success=False,
+            error_type=type(error).__name__, topology_state=args.scenario,
+            mw_violation=False, trial_status=classify_error(error),
+        )
         return
 
+    any_unmatched = False
+    final_error = None
     for next_version in (1, 2, 3):
         prev_version = next_version - 1
 
@@ -46,6 +60,7 @@ def trial(client, delayed_client, session, trial_num, logger, experiment_id, arg
         result, error, inv, resp, latency = timed_op(do_cas)
         matched = result.matched_count if result else 0
         mw_violation = error is None and matched == 0
+        any_unmatched = any_unmatched or mw_violation
         logger.log(
             trial=trial_num, client_id="client-A", session_id=session_id,
             operation=f"write_v{next_version}", key=key, requested_version=prev_version,
@@ -56,7 +71,21 @@ def trial(client, delayed_client, session, trial_num, logger, experiment_id, arg
             topology_state=args.scenario, mw_violation=mw_violation,
         )
         if error is not None:
+            final_error = error
             break
+
+    if final_error is not None:
+        status, violation = classify_error(final_error), False
+    elif any_unmatched:
+        status, violation = "precondition_unmatched", True
+    else:
+        status, violation = "in_order", False
+    logger.log(
+        trial=trial_num, client_id="client-A", session_id=session_id,
+        operation="mw_check", key=key, success=final_error is None,
+        error_type=type(final_error).__name__ if final_error else None,
+        topology_state=args.scenario, mw_violation=violation, trial_status=status,
+    )
 
 
 def main():
