@@ -122,6 +122,10 @@ The existing primary-failure, secondary-failure, and partition runs remain the c
 experiments; a long batch under one injected fault would not represent many independent fault
 episodes. For failure scenarios, report each fault episode and failover/recovery duration separately.
 
+The completed high-resolution batch used run ID `p95-hires-20260926`; its 16 cell logs and manifests
+are under `results/raw/` and `results/manifests/`. The earlier `p95-20260926` batch is retained as
+raw audit data but uses the coarse Windows monotonic clock and is not the dataset for p95 conclusions.
+
 The matrix and workload scripts use local OS-managed locks, so duplicate invocations in this
 workspace are rejected and the locks are automatically released when the owning process exits.
 These locks do not coordinate separate clones or manual Docker/fault commands. Do not run a second
