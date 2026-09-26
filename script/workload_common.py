@@ -2,6 +2,7 @@
 import argparse
 import random
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -70,6 +71,8 @@ def run_workload(property_name, args, get_client, trial_fn):
             run_id=args.run_id,
             causal=args.causal,
             read_target=args.read_target,
+            latency_clock="perf_counter_ns",
+            latency_clock_resolution_ns=time.get_clock_info("perf_counter").resolution * 1e9,
             status="running",
         )
 
@@ -97,6 +100,8 @@ def run_workload(property_name, args, get_client, trial_fn):
                 run_id=args.run_id,
                 causal=args.causal,
                 read_target=args.read_target,
+                latency_clock="perf_counter_ns",
+                latency_clock_resolution_ns=time.get_clock_info("perf_counter").resolution * 1e9,
                 status="complete",
             )
         finally:

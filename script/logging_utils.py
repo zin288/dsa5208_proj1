@@ -87,17 +87,19 @@ def write_manifest(experiment_id, out_dir=RESULTS_MANIFEST_DIR, **fields):
 
 
 def timed_op(func, *args, **kwargs):
-    """Runs func(*args, **kwargs); returns (result, error, invoke_ns, response_ns, latency_ms).
+    """Run an operation timed with Python's high-resolution monotonic performance clock.
+
+    Returns (result, error, invoke_ns, response_ns, latency_ms).
 
     error is the caught Exception instance, or None on success; result is None on failure.
     """
-    invoke_ns = time.monotonic_ns()
+    invoke_ns = time.perf_counter_ns()
     error = None
     result = None
     try:
         result = func(*args, **kwargs)
     except Exception as exc:
         error = exc
-    response_ns = time.monotonic_ns()
+    response_ns = time.perf_counter_ns()
     latency_ms = (response_ns - invoke_ns) / 1e6
     return result, error, invoke_ns, response_ns, latency_ms

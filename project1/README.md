@@ -98,19 +98,24 @@ linear interpolation at position `(n - 1) * 0.95`. Failed operations and timeout
 the successful-operation percentile and reported in a separate count. At 2,000 successful samples,
 roughly 100 observations lie in the upper 5% tail.
 
+Latency is measured with Python's high-resolution monotonic `time.perf_counter_ns()` clock. Its
+source and reported resolution are stored in each manifest. The initial batch used
+`time.monotonic_ns()`, which this Python 3.10.9 Windows environment reports at only 15.625 ms
+resolution; its quantized output is preserved for audit but should not be used for p95 conclusions.
+
 Run the p95 batch with a unique label:
 
 ```powershell
-.\.venv\Scripts\python.exe script\run_matrix.py --configs C1 C2 C3 C4 --properties RYW MR MW WFR --scenarios normal --trials 2000 --run-id p95-20260926
+.\.venv\Scripts\python.exe script\run_matrix.py --configs C1 C2 C3 C4 --properties RYW MR MW WFR --scenarios normal --trials 2000 --run-id p95-hires-20260926 2>&1 | Tee-Object -FilePath results\run_p95_hires_2000.log
 ```
 
 The run creates one JSONL file and manifest for each cell. After it completes, produce the CSV:
 
 ```powershell
-.\.venv\Scripts\python.exe script\analyze_latency.py --run-id p95-20260926
+.\.venv\Scripts\python.exe script\analyze_latency.py --run-id p95-hires-20260926
 ```
 
-The summary is written to `results/processed/p95-p95-20260926.csv`. Review the successful sample
+The summary is written to `results/processed/p95-p95-hires-20260926.csv`. Review the successful sample
 count for every operation group before interpreting its p95; groups with few successful samples
 should not be compared as if they had 2,000 observations. This p95 batch is for normal operation.
 The existing primary-failure, secondary-failure, and partition runs remain the consistency/fault
