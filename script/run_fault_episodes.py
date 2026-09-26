@@ -61,7 +61,11 @@ def wait_for_healthy_cluster(timeout_seconds):
                 consecutive_ready_checks += 1
                 if consecutive_ready_checks >= 2:
                     client.close()
-                    return
+                    return next(
+                        member["name"].split(":", 1)[0]
+                        for member in members
+                        if member["stateStr"] == "PRIMARY"
+                    )
             else:
                 consecutive_ready_checks = 0
         except Exception as exc:

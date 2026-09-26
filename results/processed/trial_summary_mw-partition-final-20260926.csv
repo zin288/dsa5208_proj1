@@ -1,0 +1,3 @@
+experiment_id,run_id,config,scenario,property,read_target,causal,causal_session_effective_for_reads,manifest_status,git_commit,planned_trials,observed_trials,duplicate_op_records,valid_observation,in_order,read_miss,precondition_unmatched,acked_write_lost,unacknowledged_effect_present,interrupted,timeout,operation_error,indeterminate,not_executed,decidable_trials,observed_violations
+C2-mw_fault_partition-mw-partition-final-20260926-seed0,mw-partition-final-20260926,C2,mid_partition,MW,,on,,complete,e3910e7950957ad419c3c8ab945c4d6210c65df5,3,3,0,0,0,0,0,3,0,0,0,0,0,0,3,3
+C4-mw_fault_partition-mw-partition-final-20260926-seed0,mw-partition-final-20260926,C4,mid_partition,MW,,on,,complete,e3910e7950957ad419c3c8ab945c4d6210c65df5,3,3,0,0,0,0,0,0,3,0,0,0,0,0,0,0

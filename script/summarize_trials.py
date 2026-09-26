@@ -25,7 +25,7 @@ DEFAULT_OUTPUT = RESULTS_DIR / "processed" / "trial_summary.csv"
 
 STATUS_COLUMNS = [
     "valid_observation", "in_order", "read_miss", "precondition_unmatched",
-    "acked_write_lost", "interrupted", "timeout", "operation_error",
+    "acked_write_lost", "unacknowledged_effect_present", "interrupted", "timeout", "operation_error",
     "indeterminate", "not_executed",
 ]
 

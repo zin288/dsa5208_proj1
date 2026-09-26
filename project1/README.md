@@ -176,6 +176,28 @@ two consecutive checks before the next episode starts. Use `--configs`, `--prope
 own run ID and raw log/manifest. This is a focused follow-up, not a replacement for the full matrix;
 it does not claim that ten operations within one episode are ten independent failures.
 
+For the targeted monotonic-writes partition comparison (`w:1` C2 versus `majority` C4), run three
+independent fault/recovery episodes per configuration:
+
+```powershell
+.\.venv\Scripts\python.exe script\test_monotonic_writes_fault.py --config C2 --fault-kind partition --trials 3 --run-id mw-partition-compare-20260926
+.\.venv\Scripts\python.exe script\test_monotonic_writes_fault.py --config C4 --fault-kind partition --trials 3 --run-id mw-partition-compare-20260926
+.\.venv\Scripts\python.exe script\summarize_trials.py --run-id mw-partition-compare-20260926 --output results\processed\trial_summary_mw-partition-compare-20260926.csv
+.\.venv\Scripts\python.exe script\build_results_index.py --mw-fault-run-id mw-partition-compare-20260926 --mw-fault-episodes 3
+```
+
+The completed selected comparison in this repository uses run ID `mw-partition-final-20260926`;
+its episode summary is `results/processed/trial_summary_mw-partition-final-20260926.csv`. The
+index generator includes that run by default. Use a new run ID for any additional execution and
+pass it to both the summary and index commands.
+
+Each episode logs the primary that was isolated, the fault application/recovery events, each write
+acknowledgement or timeout, and the post-recovery counter. `acked_write_lost` means the recovered
+counter is below the number of acknowledged increments. `unacknowledged_effect_present` means an
+unacknowledged/timed-out increment nevertheless appears in the recovered state; it is not counted
+as a successful majority commit or as an acknowledged-write loss. The results index adds these two
+supplemental MW rows without rerunning other matrix cells.
+
 Latency is measured with Python's high-resolution monotonic `time.perf_counter_ns()` clock. Its
 source and reported resolution are stored in each manifest. The initial batch used
 `time.monotonic_ns()`, which this Python 3.10.9 Windows environment reports at only 15.625 ms

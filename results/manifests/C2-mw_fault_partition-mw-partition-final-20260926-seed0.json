@@ -1,0 +1,20 @@
+{
+  "experiment_id": "C2-mw_fault_partition-mw-partition-final-20260926-seed0",
+  "git_commit": "e3910e7950957ad419c3c8ab945c4d6210c65df5",
+  "created_utc": "2026-09-26T11:53:07.527272+00:00",
+  "status": "complete",
+  "config": "C2",
+  "scenario": "mid_partition",
+  "property": "MW",
+  "trials": 3,
+  "seed": 0,
+  "run_id": "mw-partition-final-20260926",
+  "causal": "on",
+  "fault_kind": "partition",
+  "fault_point": "after_v1",
+  "election_wait_s": 15,
+  "settle_ms": 15000,
+  "read_timeout_ms": 10000,
+  "primary_selection": "current_primary_at_episode_start",
+  "latency_clock": "perf_counter_ns"
+}
