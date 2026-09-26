@@ -242,10 +242,12 @@ and (for normal cells) the separate latency-data paths. If the curated run IDs
 change, provide `--core-run-id`, `--corrected-mr-run-id`, and `--latency-run-id`.
 The current generated index is [latest_results.csv](../results/processed/latest_results.csv).
 
-The earlier standalone normal-only high-sample batch and the 64-cell 30-trial matrix remain in the
-results tree as separate historical runs. They are not the combined 33,440-trial run described
-above. The combined run is planned but has not been started; a new invocation of the default
-command above collects both sampling levels under one run ID without overwriting historical data.
+The published `latest_results.csv` index maps each of the 64 core consistency cells to its selected
+raw JSONL log and manifest, including the corrected MR reruns, and maps the 16 normal cells to the
+separate high-resolution latency logs. Two supplemental MW partition rows record the selected
+C2/C4 fault episodes. All files referenced by this index are included in the repository. Earlier
+standalone batches remain in the results tree as historical data and are not substituted for the
+selected evidence listed in the index.
 
 The matrix and workload scripts use local OS-managed locks, so duplicate invocations in this
 workspace are rejected and the locks are automatically released when the owning process exits.

@@ -1,0 +1,3 @@
+config,property,scenario,operation,target_node,successful_observations,failed_operations,p95_latency_ms
+C1,RYW,normal,read,delayed,100,0,2.74177
+C1,RYW,normal,write,primary,100,0,9.287675

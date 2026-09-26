@@ -1,0 +1,17 @@
+{
+  "experiment_id": "C1-normal-MW-matrix-20260926T063608Z-seed0",
+  "git_commit": "4355a83ed18665a0f441b2b25785eabb51a560e2",
+  "created_utc": "2026-09-26T06:54:23.507057+00:00",
+  "status": "complete",
+  "config": "C1",
+  "scenario": "normal",
+  "property": "MW",
+  "trials": 2000,
+  "seed": 0,
+  "run_id": "matrix-20260926T063608Z",
+  "causal": "on",
+  "read_target": "secondary",
+  "latency_clock": "perf_counter_ns",
+  "latency_clock_resolution_ns": 100.0,
+  "causal_session_effective_for_reads": true
+}

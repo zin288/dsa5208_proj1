@@ -1,0 +1,14 @@
+{
+  "experiment_id": "C1-normal-MR-p95-20260926-seed0",
+  "git_commit": "31aca5ee506956c8db1497a0bf6cad3960c13626",
+  "created_utc": "2026-09-26T02:06:38.165570+00:00",
+  "config": "C1",
+  "scenario": "normal",
+  "property": "MR",
+  "trials": 2000,
+  "seed": 0,
+  "run_id": "p95-20260926",
+  "causal": "on",
+  "read_target": null,
+  "status": "complete"
+}

@@ -1,0 +1,20 @@
+{
+  "experiment_id": "C2-partition-RYW-bounded-read-smoke-seed0",
+  "git_commit": "4355a83ed18665a0f441b2b25785eabb51a560e2",
+  "created_utc": "2026-09-26T07:26:35.037528+00:00",
+  "status": "complete",
+  "config": "C2",
+  "scenario": "partition",
+  "property": "RYW",
+  "trials": 1,
+  "seed": 0,
+  "run_id": "bounded-read-smoke",
+  "causal": "on",
+  "read_target": "secondary",
+  "latency_clock": "perf_counter_ns",
+  "latency_clock_resolution_ns": 100.0,
+  "read_timeout_ms": 2000,
+  "pre_write_pause_ms": 0,
+  "post_write_delay_ms": 0,
+  "causal_session_effective_for_reads": true
+}
