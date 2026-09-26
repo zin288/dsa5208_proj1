@@ -155,13 +155,65 @@ The operation history, rather than only the final document value, is used for co
 
 ### 5.2 Workloads
 
-**RYW workload.** The client writes version 1 to the primary, waits for the write call to return, and reads the same document from a selected target: primary, normal secondary, or delayed secondary. A read returning no document or a version below 1 after a successful write is marked `ryw_violation` when the read itself succeeds. Driver errors and timeouts are reported separately.
+Each trial ends with a `*_check` record carrying a `trial_status` classification:
+`valid_observation` / `in_order` (the property's check was decidable and held or was
+tested), `read_miss` (a read returned no document; the sequence never formed),
+`precondition_unmatched` (a compare-and-set predicate failed; indeterminate proxy),
+`acked_write_lost` (an acknowledged write's effect vanished), `interrupted`,
+`timeout`, `operation_error`, or `indeterminate`. Violation flags are set only on
+decidable observations: an empty read on a lagging path or a failed operation is
+never counted as a consistency violation.
 
-**MR workload.** The client performs two reads of the same document. The first and second read targets are configurable; the formal workload uses an up-to-date target followed by a delayed target where applicable. A successful second read with a version lower than the first is marked `mr_violation`.
+**RYW workload.** The client first writes a baseline version 0, then the tested
+version 1 to the primary, and then reads the same document from a selected target:
+primary, normal secondary, or delayed secondary. A read returning a version older
+than the acknowledged write (i.e. the baseline) is a `ryw_violation` on a
+`valid_observation` trial; a read returning no document is recorded as `read_miss`
+(a staleness observation of that path, kept separate from violations); driver
+errors and timeouts are reported separately. Optional timing pauses
+(`--pre-write-pause-ms`, `--post-write-delay-ms`) place the delayed read inside the
+window where the delayed member has applied the baseline but not the tested write,
+which is how a non-null stale version becomes observable.
 
-**MW workload.** The client performs sequential updates from version 0 to 1, 2, and 3. Each update uses the immediately preceding version as a compare-and-set predicate. The logs record whether the predecessor matched, along with invocation order, acknowledgement, and errors. A failed predecessor match is marked as an observable `mw_violation` proxy.
+**MR workload.** The client writes a baseline version 0, optionally waits a
+configurable settle time, updates to version 1, then performs two reads of the same
+document from configurable targets (default: normal secondary for both, inside the
+causal session). A successful second read with a strictly smaller non-null version
+than the first is an `mr_violation` on a `valid_observation` trial; a read
+returning no document makes the trial `read_miss`. The two-version design makes a
+version regression observable at all; with `--second-read-target delayed` and a
+settle of ~11 s, the second read lands in the window where the delayed member has
+the baseline but not the update.
 
-**WFR workload.** The client first reads a document, derives the next version from the returned version, and then sends a compare-and-set update using the read version as its predicate. The read value, derived write value, target, session identifier where available, and update result are logged. A missing read baseline or failed predicate is marked as an observable `wfr_violation`.
+**MW workload.** The client performs sequential updates from version 0 to 1, 2, and 3.
+Each update uses the immediately preceding version as a compare-and-set predicate.
+The logs record whether the predecessor matched, along with invocation order,
+acknowledgement, and errors. A failed predecessor match on an otherwise successful
+sequence is recorded as `precondition_unmatched` - the observable proxy for a
+monotonic-writes violation - while errors and timeouts are classified separately.
+
+**MW mid-sequence fault workload.** The main matrix applies one fault around a whole
+cell, so a separate workload injects a fault *between* the client's writes: insert a
+counter, increment it (acknowledged), inject a partition or stop the primary,
+increment again, wait out the election, increment a third time, recover, and read
+the final counter. Because increments compose, the final value exposes whether every
+acknowledged increment's effect survived: with `w:1`, the middle increment is
+acknowledged by the isolated old primary alone and rolls back on rejoin, while the
+third increment persists from the majority side - the client observed three
+acknowledgements but the final state misses one (`acked_write_lost`, recorded as an
+observable monotonic-writes ordering break caused by rollback). With `majority`
+write concern the faulted writes time out instead, showing the availability price
+of the stronger concern. Each trial is an independent inject/recover episode.
+
+**WFR workload.** The client inserts a baseline version 0, optionally waits a
+settle time, reads the document from a selected target, derives the next version
+from the returned version, and sends a compare-and-set update using the read
+version as its predicate. The read value, derived write value, target, session
+transmission flag, and update result are logged. A read returning no document is
+`read_miss` (the writes-follow-reads sequence never formed, so the trial judges
+nothing); a failed predicate is `precondition_unmatched` (indeterminate with a
+single client); a matched derived write is a `valid_observation` with the sequence
+formed and held.
 
 ### 5.3 Logging and reproducibility
 
@@ -196,11 +248,11 @@ $$16\text{ normal cells} \times 2{,}000 + 48\text{ fault/partition cells} \times
 
 Each cell is one configuration × one consistency property × one scenario. The four configurations are crossed with four properties and four scenarios (`normal`, `secondary_down`, `primary_down`, `partition`), yielding 64 cells. This covers the three scenario classes required by the project; node failure is split into secondary and primary failure for additional detail. Normal-operation cells use 2,000 trials to supply larger per-operation latency samples. Fault/partition cells use 30 operations during one sustained injected episode; this is a consistency-under-fault sample, not 30 independent failures and not a robust tail-latency sample. The combined matrix is documented and implemented but has not yet been rerun; prior 64-cell/30-trial and 16-cell/2,000-normal-trial collections are separate historical runs and should not be described as the combined matrix.
 
-The command in `project1/README.md` runs all cells in one batch with an automatically generated run ID. The run can be previewed with `script/run_matrix.py --plan` and resumed by passing the same printed run ID. For users seeking additional evidence about failure-to-failure variability, `script/run_fault_episodes.py` provides an optional focused study: by default it compares C1/C3 over four properties and three fault conditions, with three independent inject/recover episodes per combination and ten operations per episode (72 episodes, 720 operation trials). It requires the topology to be healthy and replication lag to be within bounds before starting the next episode. This follow-up is optional and separate from the main matrix.
+The command in `project1/README.md` runs all cells in one batch with an automatically generated run ID. The run can be previewed with `script/run_matrix.py --plan` and resumed by passing the same printed run ID. In addition, `script/run_matrix.py --preset revised` runs the priority batch assembled after the verdict-semantics revision: twelve same-session normal cells (RYW/MR/WFR x C1-C4, reads on the normal secondary inside the causal session - the path the prediction table actually describes) plus four MW mid-sequence fault cells (C1-C4, ten independent inject/recover episodes each). Optional delayed-path contrast cells with explicit settle timings are documented in the README. For users seeking additional evidence about failure-to-failure variability, `script/run_fault_episodes.py` provides an optional focused study: by default it compares C1/C3 over four properties and three fault conditions, with three independent inject/recover episodes per combination and ten operations per episode (72 episodes, 720 operation trials). It requires the topology to be healthy and replication lag to be within bounds before starting the next episode. This follow-up is optional and separate from the main matrix.
 
 ## 6. Results and Evaluation
 
-*To be completed by the evaluation/analysis owner after the combined matrix is run. Report the actual run ID, per-cell sample counts, successful operations, errors and timeouts, violation counts/rates, normal-operation latency percentiles, and prediction-versus-observation comparisons. If the optional independent fault-episode study is run, report episode counts separately from operation counts and summarize recovery timing. Do not treat `0/N` observed violations as proof of a universal guarantee.*
+*To be completed by the evaluation/analysis owner after the combined matrix is run. Report the actual run ID, per-cell sample counts, successful operations, errors and timeouts, violation counts/rates, normal-operation latency percentiles, and prediction-versus-observation comparisons. `script/summarize_trials.py` produces the per-cell `trial_summary.csv` with corrected `trial_status` labels for both pre-revision and revised logs, and flags incomplete cells. If the optional independent fault-episode study is run, report episode counts separately from operation counts and summarize recovery timing. Do not treat `0/N` observed violations as proof of a universal guarantee.*
 
 ## 7. Discussion and Limitations
 

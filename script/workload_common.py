@@ -48,6 +48,40 @@ def build_arg_parser(description, default_read_target="secondary"):
     return parser
 
 
+def classify_error(error):
+    """Map a caught driver exception to a trial_status bucket.
+
+    Timeouts (wtimeout, server selection) are separated from other operation
+    errors because they say "unavailable within limits", not "consistency broke".
+    """
+    if error is None:
+        return None
+    return "timeout" if "Timeout" in type(error).__name__ else "operation_error"
+
+
+def manifest_fields(args):
+    """Read-routing/timing fields to merge into every manifest this workload writes.
+
+    causal_session_effective_for_reads records whether the reads of this workload
+    can actually travel inside the causal session: delayed reads use a direct
+    connection that cannot carry the replica-set client's ClientSession, so any
+    delayed read target makes this False regardless of --causal on.
+    """
+    fields = {}
+    for name in ("read_target", "first_read_target", "second_read_target", "settle_ms",
+                 "pre_write_pause_ms", "post_write_delay_ms"):
+        value = getattr(args, name, None)
+        if value is not None:
+            fields[name] = value
+    targets = [t for t in (fields.get("read_target"), fields.get("first_read_target"),
+                           fields.get("second_read_target")) if t]
+    if targets:
+        fields["causal_session_effective_for_reads"] = (
+            args.causal == "on" and "delayed" not in targets
+        )
+    return fields
+
+
 def make_experiment_id(property_name, args):
     run_component = f"-{args.run_id}" if args.run_id else ""
     return f"{args.config}-{args.scenario}-{property_name}{run_component}-seed{args.seed}"
@@ -59,6 +93,7 @@ def run_workload(property_name, args, get_client, trial_fn):
     """
     random.seed(args.seed)
     experiment_id = make_experiment_id(property_name, args)
+    extras = manifest_fields(args)
     with experiment_lock():
         logger = JsonlLogger(experiment_id, run_id=args.run_id)
         write_manifest(
@@ -74,6 +109,7 @@ def run_workload(property_name, args, get_client, trial_fn):
             latency_clock="perf_counter_ns",
             latency_clock_resolution_ns=time.get_clock_info("perf_counter").resolution * 1e9,
             status="running",
+            **extras,
         )
 
         client = get_client()
@@ -103,6 +139,7 @@ def run_workload(property_name, args, get_client, trial_fn):
                 latency_clock="perf_counter_ns",
                 latency_clock_resolution_ns=time.get_clock_info("perf_counter").resolution * 1e9,
                 status="complete",
+                **extras,
             )
         finally:
             client.close()
