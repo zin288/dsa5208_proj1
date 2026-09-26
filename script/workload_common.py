@@ -40,6 +40,7 @@ def build_arg_parser(description, default_read_target="secondary"):
     parser.add_argument("--scenario", choices=SCENARIOS, default="normal")
     parser.add_argument("--trials", type=int, default=30)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--run-id", default=None)
     parser.add_argument("--causal", choices=["on", "off"], default="on")
     parser.add_argument("--read-target", choices=["primary", "secondary", "delayed"],
                          default=default_read_target)
@@ -47,7 +48,8 @@ def build_arg_parser(description, default_read_target="secondary"):
 
 
 def make_experiment_id(property_name, args):
-    return f"{args.config}-{args.scenario}-{property_name}-seed{args.seed}"
+    run_component = f"-{args.run_id}" if args.run_id else ""
+    return f"{args.config}-{args.scenario}-{property_name}{run_component}-seed{args.seed}"
 
 
 def run_workload(property_name, args, get_client, trial_fn):
@@ -56,31 +58,48 @@ def run_workload(property_name, args, get_client, trial_fn):
     """
     random.seed(args.seed)
     experiment_id = make_experiment_id(property_name, args)
-    logger = JsonlLogger(experiment_id)
-    write_manifest(
-        experiment_id,
-        config=args.config,
-        scenario=args.scenario,
-        property=property_name,
-        trials=args.trials,
-        seed=args.seed,
-        causal=args.causal,
-        read_target=args.read_target,
-    )
+    with experiment_lock():
+        logger = JsonlLogger(experiment_id, run_id=args.run_id)
+        write_manifest(
+            experiment_id,
+            config=args.config,
+            scenario=args.scenario,
+            property=property_name,
+            trials=args.trials,
+            seed=args.seed,
+            run_id=args.run_id,
+            causal=args.causal,
+            read_target=args.read_target,
+            status="running",
+        )
 
-    client = get_client()
-    delayed_client = get_delayed_client()
-    causal = args.causal == "on"
+        client = get_client()
+        delayed_client = get_delayed_client()
+        causal = args.causal == "on"
 
-    with experiment_lock(), apply_scenario(args.scenario):
-        for trial_num in range(1, args.trials + 1):
-            session = client.start_session(causal_consistency=causal) if causal else None
-            try:
-                trial_fn(client, delayed_client, session, trial_num, logger, experiment_id, args)
-            finally:
-                if session is not None:
-                    session.end_session()
-
-    client.close()
-    delayed_client.close()
+        try:
+            with apply_scenario(args.scenario):
+                for trial_num in range(1, args.trials + 1):
+                    session = client.start_session(causal_consistency=causal) if causal else None
+                    try:
+                        trial_fn(client, delayed_client, session, trial_num, logger, experiment_id, args)
+                    finally:
+                        if session is not None:
+                            session.end_session()
+            logger.finalize()
+            write_manifest(
+                experiment_id,
+                config=args.config,
+                scenario=args.scenario,
+                property=property_name,
+                trials=args.trials,
+                seed=args.seed,
+                run_id=args.run_id,
+                causal=args.causal,
+                read_target=args.read_target,
+                status="complete",
+            )
+        finally:
+            client.close()
+            delayed_client.close()
     print(f"done: {experiment_id} ({args.trials} trials) -> results/raw/{experiment_id}.jsonl")

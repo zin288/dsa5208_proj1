@@ -19,6 +19,7 @@ def build_arg_parser():
     parser.add_argument("--scenario", choices=SCENARIOS, default="normal")
     parser.add_argument("--trials", type=int, default=30)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--run-id", default=None)
     parser.add_argument("--causal", choices=["on", "off"], default="on")
     parser.add_argument("--first-read-target", choices=["primary", "secondary", "delayed"],
                          default="secondary")

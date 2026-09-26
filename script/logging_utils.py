@@ -1,5 +1,6 @@
 """JSONL experiment logging + timing helpers, per workflow doc section 9.2 log schema."""
 import json
+import os
 import subprocess
 import time
 import uuid
@@ -21,17 +22,21 @@ def get_git_commit():
 
 
 class JsonlLogger:
-    """Appends one JSON record per operation to results/raw/<experiment_id>.jsonl."""
+    """Publishes a raw JSONL file only after every trial completes."""
 
-    def __init__(self, experiment_id, out_dir=RESULTS_RAW_DIR):
+    def __init__(self, experiment_id, out_dir=RESULTS_RAW_DIR, run_id=None):
         self.experiment_id = experiment_id
         out_dir.mkdir(parents=True, exist_ok=True)
         self.path = out_dir / f"{experiment_id}.jsonl"
+        self.partial_path = out_dir / f"{experiment_id}.jsonl.partial"
+        self.partial_path.unlink(missing_ok=True)
+        self.run_id = run_id
         self._git_commit = get_git_commit()
 
     def log(self, **fields):
         record = {
             "experiment_id": self.experiment_id,
+            "run_id": self.run_id,
             "trial": None,
             "op_id": uuid.uuid4().hex,
             "client_id": None,
@@ -54,8 +59,16 @@ class JsonlLogger:
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         }
         record.update(fields)
-        with self.path.open("a", encoding="utf-8") as f:
+        with self.partial_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(record) + "\n")
+
+    def finalize(self):
+        if not self.partial_path.exists():
+            raise RuntimeError("Cannot publish an empty experiment log")
+        with self.partial_path.open("ab") as f:
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(self.partial_path, self.path)
 
 
 def write_manifest(experiment_id, out_dir=RESULTS_MANIFEST_DIR, **fields):
@@ -67,7 +80,9 @@ def write_manifest(experiment_id, out_dir=RESULTS_MANIFEST_DIR, **fields):
     }
     manifest.update(fields)
     path = out_dir / f"{experiment_id}.json"
-    path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    temporary_path = path.with_suffix(path.suffix + ".tmp")
+    temporary_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    os.replace(temporary_path, path)
     return path
 
 

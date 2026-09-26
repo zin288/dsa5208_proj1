@@ -11,7 +11,7 @@ read/write concern configurations, node failures, and network partitions.
 | OS | Windows 11 |
 | Docker Desktop | 4.92.0 (engine 29.8.0, API 1.56) |
 | Docker Compose | v5.5.1 |
-| Python (host venv) | 3.10.9 |
+| Python (host venv) | 3.10.9 (used for recorded runs; workflow recommends 3.11+) |
 | PyMongo | 4.17.0 |
 | MongoDB image | `dsa5208/mongo-lab:8.0.32` (built from `mongo:8.0.32-noble`) |
 | Git | 2.36.1 |
@@ -83,13 +83,52 @@ Shared connection helpers and the C1–C4 read/write concern configurations live
   ```powershell
   .\.venv\Scripts\python.exe script\run_matrix.py --trials 30
   ```
-  Use `--configs`, `--properties`, `--scenarios` to restrict to a subset for smoke testing.
+  Use `--configs`, `--properties`, and `--scenarios` to restrict a run. `--run-id` gives a batch
+  a distinct output namespace; choose a new value if the requested trial count differs from an
+  existing batch. The runner validates each manifest and trial-ID coverage before skipping a cell,
+  uses OS-managed locks to reject concurrent runs, publishes raw JSONL only after a cell completes,
+  and enforces a default one-hour per-cell timeout (`--cell-timeout-seconds` can override it).
+
+### P95 latency run
+
+The p95 extension measures normal-operation latency for all four consistency configurations and
+all four workloads: 16 cells, with 2,000 trials per cell (32,000 trials total). Each operation
+type and target node is summarized separately; reads and writes are not pooled. The estimator uses
+linear interpolation at position `(n - 1) * 0.95`. Failed operations and timeouts are excluded from
+the successful-operation percentile and reported in a separate count. At 2,000 successful samples,
+roughly 100 observations lie in the upper 5% tail.
+
+Run the p95 batch with a unique label:
+
+```powershell
+.\.venv\Scripts\python.exe script\run_matrix.py --configs C1 C2 C3 C4 --properties RYW MR MW WFR --scenarios normal --trials 2000 --run-id p95-20260926
+```
+
+The run creates one JSONL file and manifest for each cell. After it completes, produce the CSV:
+
+```powershell
+.\.venv\Scripts\python.exe script\analyze_latency.py --run-id p95-20260926
+```
+
+The summary is written to `results/processed/p95-p95-20260926.csv`. Review the successful sample
+count for every operation group before interpreting its p95; groups with few successful samples
+should not be compared as if they had 2,000 observations. This p95 batch is for normal operation.
+The existing primary-failure, secondary-failure, and partition runs remain the consistency/fault
+experiments; a long batch under one injected fault would not represent many independent fault
+episodes. For failure scenarios, report each fault episode and failover/recovery duration separately.
+
+The matrix and workload scripts use local OS-managed locks, so duplicate invocations in this
+workspace are rejected and the locks are automatically released when the owning process exits.
+These locks do not coordinate separate clones or manual Docker/fault commands. Do not run a second
+experiment from another checkout or manipulate the cluster while a batch is active.
 
 Predictions made before running the formal matrix are recorded in
 [results/manifests/predictions.md](../results/manifests/predictions.md).
 
 Raw per-operation JSONL logs land in `results/raw/<experiment_id>.jsonl`; run manifests (config,
 scenario, trial count, seed, git commit) land in `results/manifests/<experiment_id>.json`.
+An interrupted cell leaves only a `.partial` file, not a completed JSONL. Use a new `--run-id` for a
+fresh batch rather than reusing a run ID with a different trial count.
 
 **Note:** mongo3 (priority 0, delayed secondary) does not appear in the replica-set client's
 discovered topology (absent from `hello`'s `hosts`/`passives` fields), so it can only be reached
